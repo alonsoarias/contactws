@@ -1,0 +1,71 @@
+<?php
+
+// set to defaults if undefined
+if (!isset($config->service)) {
+    $config->service = '127.0.0.1';
+}
+if (!isset($config->userparam)) {
+    $config->userparam = 'Username';
+}
+if (!isset($config->pswdparam)) {
+    $config->pswdparam = 'Contrasena';
+}
+
+if (!isset($config->addparam)) {
+    $config->addparam = 'true';
+}
+
+if (!isset($config->changepasswordurl )) {
+    $config->changepasswordurl = 'htp://url.com';
+}
+
+?>
+<table cellspacing="0" cellpadding="5" border="0">
+
+<tr valign="top" class="required">
+    <td align="right"><?php print_string('auth_contactws_service', 'auth_contactws') ?>: </td>
+    <td>
+        <input name="service" type="text" size="80" value="<?php echo $config->service ?>" />
+       
+    </td>
+</tr>
+
+
+<tr valign="top" class="required">
+    <td align="right"><?php print_string('auth_contactws_userparam', 'auth_contactws') ?>: </td>
+    <td>
+        <input name="userparam" type="text" size="80" value="<?php echo $config->userparam ?>" />
+       
+    </td>
+</tr>
+
+
+<tr valign="top" class="required">
+    <td align="right"><?php print_string('auth_contactws_pswdparam', 'auth_contactws') ?>: </td>
+    <td>
+        <input name="pswdparam" type="text" size="80" value="<?php echo $config->pswdparam ?>" />
+       
+    </td>
+</tr>
+
+<tr valign="top" class="required">
+    <td align="right"><?php print_string('auth_contactws_addparam', 'auth_contactws') ?>: </td>
+    <td>
+        <input name="addparam" type="text" size="80" value="<?php echo $config->addparam ?>" />
+       
+    </td>
+</tr>
+
+<tr valign="top" class="required">
+    <td align="right"><?php print_string('auth_contactws_changepasswordurl', 'auth_contactws') ?>: </td>
+    <td>
+        <input name="changepasswordurl" type="text" size="80" value="<?php echo $config->changepasswordurl ?>" />
+       
+    </td>
+</tr>
+<?php
+
+print_auth_lock_options($this->authtype, $user_fields, get_string('auth_fieldlocks_help', 'auth'), false, false);
+
+?>
+</table>
