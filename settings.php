@@ -28,8 +28,63 @@ defined('MOODLE_INTERNAL') || die();
 if ($hassiteconfig) {
     $settings = new admin_settingpage('auth_contactws_settings', new lang_string('pluginname', 'auth_contactws'));
 
-    // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedIf
     if ($ADMIN->fulltree) {
-        // TODO: Define actual plugin settings page and add it to the tree - {@link https://docs.moodle.org/dev/Admin_settings}.
+
+        // Service URL setting
+        $settings->add(new admin_setting_configtext(
+            'auth_contactws/service',
+            get_string('auth_contactws_service', 'auth_contactws'),
+            get_string('auth_contactws_service_desc', 'auth_contactws'),
+            '127.0.0.1',
+            PARAM_URL
+        ));
+
+        // User parameter setting
+        $settings->add(new admin_setting_configtext(
+            'auth_contactws/userparam',
+            get_string('auth_contactws_userparam', 'auth_contactws'),
+            get_string('auth_contactws_userparam_desc', 'auth_contactws'),
+            'Username',
+            PARAM_TEXT
+        ));
+
+        // Password parameter setting
+        $settings->add(new admin_setting_configtext(
+            'auth_contactws/pswdparam',
+            get_string('auth_contactws_pswdparam', 'auth_contactws'),
+            get_string('auth_contactws_pswdparam_desc', 'auth_contactws'),
+            'Contrasena',
+            PARAM_TEXT
+        ));
+
+        // Additional parameter setting
+        $settings->add(new admin_setting_configtext(
+            'auth_contactws/addparam',
+            get_string('auth_contactws_addparam', 'auth_contactws'),
+            get_string('auth_contactws_addparam_desc', 'auth_contactws'),
+            'true',
+            PARAM_TEXT
+        ));
+
+        // Change password URL setting
+        $settings->add(new admin_setting_configtext(
+            'auth_contactws/changepasswordurl',
+            get_string('auth_contactws_changepasswordurl', 'auth_contactws'),
+            get_string('auth_contactws_changepasswordurl_desc', 'auth_contactws'),
+            'http://url.com',
+            PARAM_URL
+        ));
+
+        // Lock/Unlock settings for user fields
+        $settings->add(new admin_setting_heading(
+            'auth_contactws/fieldlocks',
+            get_string('auth_fieldlocks', 'auth'),
+            get_string('auth_fieldlocks_help', 'auth')
+        ));
+
+    // Display locking / mapping of profile fields.
+    $authplugin = get_auth_plugin('contactws');
+    display_auth_lock_options($settings,$authplugin->authtype, $authplugin->userfields,
+            get_string('auth_fieldlocks_help', 'auth'), false, false);
     }
 }
