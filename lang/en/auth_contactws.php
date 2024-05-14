@@ -1,6 +1,5 @@
 <?php
-
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -13,26 +12,18 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Strings for component 'auth_pop3', language 'en', branch 'MOODLE_20_STABLE'
+ * Plugin strings are defined here.
  *
- * @package   auth_pop3
- * @copyright 1999 onwards Martin Dougiamas  {@link http://moodle.com}
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package     auth_contactws
+ * @category    string
+ * @copyright   2024 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
+$string['auth_description'] = '1';
 $string['pluginname'] = 'Contact Web Service Authentication';
-$string['auth_contactws_service'] = 'Web service URL';
-$string['auth_contactws_userparam'] = 'User parameter name';
-$string['auth_contactws_pswdparam'] = 'Password parameter name';
-$string['auth_contactws_addparam'] = 'Additional parameter';
-$string['auth_contactws_changepasswordurl'] = 'Password change URL';
-$string['auth_contactws_service'] = 'URL del servicio Web';
-$string['auth_contactws_userparam'] = 'Param usuario';
-$string['auth_contactws_pswdparam'] = 'Param de contrasena';
-$string['auth_contactwsdescription'] = 'Autenticacion para contact center';
-$string['pluginname'] = 'Autenticacion Contact Center';
-$string['auth_contactws_changepasswordurl'] = 'URL de cambio de contrasena';
-$string['auth_contactws_addparam'] = 'Nombre del parámetro adicional para el web service';
