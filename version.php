@@ -1,14 +1,9 @@
 <?php
+defined('MOODLE_INTERNAL') || die();
 
-/**
- * Plugin version info
- *
- * @package    Autenticación Contact Center educcamvirtual.com
- * @copyright  Ing. Pablo A Pico @pabloapico
- * @license    Únicamente para uso de educcamvirtual.com
- */
-
-$plugin->component = 'auth_contactws'; // Full name of the plugin (used for diagnostics)
-$plugin->version   = 2017041301; // The current module version (Date: YYYYMMDDXX)
-$plugin->release   = '1.01';
+$plugin->component = 'auth_contactws'; // Nombre completo del plugin.
+$plugin->version   = 2023010100; // La versión del plugin.
+$plugin->requires  = 2022041900; // Versión mínima de Moodle necesaria.
 $plugin->maturity  = MATURITY_STABLE;
+$plugin->release   = '1.0 (Build: 2023010100)';
+$plugin->cron      = 0;
