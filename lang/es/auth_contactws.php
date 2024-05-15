@@ -24,6 +24,7 @@
  */
 
 defined('MOODLE_INTERNAL') || die();
+
 $string['pluginname'] = 'Contact Web Service Authentication';
 $string['auth_contactws_service'] = 'URL del servicio Web';
 $string['auth_contactws_service_desc'] = 'La URL del servicio web utilizado para la autenticación.';
@@ -35,6 +36,6 @@ $string['auth_contactws_addparam'] = 'Parámetro adicional';
 $string['auth_contactws_addparam_desc'] = 'El nombre de un parámetro adicional que se enviará al servicio web.';
 $string['auth_contactws_changepasswordurl'] = 'URL de cambio de contraseña';
 $string['auth_contactws_changepasswordurl_desc'] = 'La URL donde los usuarios pueden cambiar su contraseña.';
-$string['auth_contactwsdescription'] = 'Autenticación para Contact Center';
+$string['auth_contactws_description'] = 'Este plugin permite a los usuarios autenticarse utilizando un servicio web.';
 $string['auth_fieldlocks'] = 'Bloqueo de campos';
 $string['auth_fieldlocks_help'] = 'Configuración de los bloqueos de campos para esta autenticación.';
