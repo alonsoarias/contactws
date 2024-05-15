@@ -77,13 +77,6 @@ if ($ADMIN->fulltree) {
         PARAM_URL
     ));
 
-    // Lock/Unlock settings for user fields
-    $settings->add(new admin_setting_heading(
-        'auth_contactws/fieldlocks',
-        get_string('auth_fieldlocks', 'auth'),
-        get_string('auth_fieldlocks_help', 'auth')
-    ));
-
     // Display locking / mapping of profile fields.
     $authplugin = get_auth_plugin('contactws');
     display_auth_lock_options(
