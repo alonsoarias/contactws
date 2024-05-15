@@ -36,6 +36,5 @@ $string['auth_contactws_addparam_desc'] = 'El nombre de un parámetro adicional 
 $string['auth_contactws_changepasswordurl'] = 'URL de cambio de contraseña';
 $string['auth_contactws_changepasswordurl_desc'] = 'La URL donde los usuarios pueden cambiar su contraseña.';
 $string['auth_contactwsdescription'] = 'Autenticación para Contact Center';
-$string['pluginname'] = 'Autenticación Contact Center';
 $string['auth_fieldlocks'] = 'Bloqueo de campos';
 $string['auth_fieldlocks_help'] = 'Configuración de los bloqueos de campos para esta autenticación.';
