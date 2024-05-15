@@ -24,6 +24,7 @@
  */
 
 defined('MOODLE_INTERNAL') || die();
+
 $string['pluginname'] = 'Contact Web Service Authentication';
 $string['auth_contactws_service'] = 'Service URL';
 $string['auth_contactws_service_desc'] = 'The URL of the web service used for authentication.';
