@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,30 +12,21 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * Plugin strings are defined here.
- *
- * @package     auth_contactws
- * @category    string
- * @copyright   2024 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
-defined('MOODLE_INTERNAL') || die();
-
-$string['pluginname'] = 'Contact Web Service Authentication';
-$string['auth_contactws_service'] = 'Service URL';
-$string['auth_contactws_service_desc'] = 'The URL of the web service used for authentication.';
-$string['auth_contactws_userparam'] = 'User Parameter';
-$string['auth_contactws_userparam_desc'] = 'The parameter name for the user in the web service request.';
-$string['auth_contactws_pswdparam'] = 'Password Parameter';
-$string['auth_contactws_pswdparam_desc'] = 'The parameter name for the password in the web service request.';
-$string['auth_contactws_addparam'] = 'Additional Parameter';
-$string['auth_contactws_addparam_desc'] = 'An additional parameter for the web service request.';
-$string['auth_contactws_changepasswordurl'] = 'Change Password URL';
-$string['auth_contactws_changepasswordurl_desc'] = 'The URL where users can change their password.';
-$string['auth_contactws_description'] = 'This plugin allows users to authenticate using a web service.';
-$string['auth_fieldlocks'] = 'Field Locks';
-$string['auth_fieldlocks_help'] = 'Configuration of field locks for this authentication.';
+$string['pluginname'] = 'Contact Web Services Authentication';
+$string['auth_contactwsdescription'] = 'Users can login using the SARH Web Services API';
+$string['baseurl'] = 'API Base URL';
+$string['baseurl_desc'] = 'Base URL for the SARH Web Services API';
+$string['apiusername'] = 'API Username';
+$string['apiusername_desc'] = 'Username for SARH API authentication';
+$string['apipassword'] = 'API Password';
+$string['apipassword_desc'] = 'Password for SARH API authentication';
+$string['auth_contactwssettings'] = 'SARH Authentication Settings';
+$string['errorauthtoken'] = 'Error getting authentication token';
+$string['errorauthapi'] = 'Error connecting to SARH API';
+$string['errorauthresponse'] = 'Invalid response from SARH API';
+$string['errorauthcreateaccount'] = 'Cannot create new accounts';
+$string['notwhileloggedinas'] = 'Cannot manage linked logins while logged in as another user';
+$string['alreadylinked'] = 'This external account is already linked to a Moodle account';
+$string['privacy:metadata'] = 'The Contact Web Services authentication plugin does not store any personal data';
