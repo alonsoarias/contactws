@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,79 +12,34 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
-
-/**
- * Plugin administration pages are defined here.
- *
- * @package     auth_contactws
- * @category    admin
- * @copyright   2024 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
-
-    // Introductory explanation.
-    $settings->add(new admin_setting_heading('auth_contactws/pluginname', '',
-    new lang_string('auth_contactws_description', 'auth_contactws')));
-
-
-    // Service URL setting
+    // Base URL setting
     $settings->add(new admin_setting_configtext(
-        'auth_contactws/service',
-        get_string('auth_contactws_service', 'auth_contactws'),
-        get_string('auth_contactws_service_desc', 'auth_contactws'),
-        '127.0.0.1',
+        'auth_contactws/baseurl',
+        get_string('baseurl', 'auth_contactws'),
+        get_string('baseurl_desc', 'auth_contactws'),
+        'https://webdes.americasbps.com/ApiSarh/api',
         PARAM_URL
     ));
 
-    // User parameter setting
+    // API Username setting
     $settings->add(new admin_setting_configtext(
-        'auth_contactws/userparam',
-        get_string('auth_contactws_userparam', 'auth_contactws'),
-        get_string('auth_contactws_userparam_desc', 'auth_contactws'),
-        'Username',
+        'auth_contactws/apiusername',
+        get_string('apiusername', 'auth_contactws'),
+        get_string('apiusername_desc', 'auth_contactws'),
+        '',
         PARAM_TEXT
     ));
 
-    // Password parameter setting
-    $settings->add(new admin_setting_configtext(
-        'auth_contactws/pswdparam',
-        get_string('auth_contactws_pswdparam', 'auth_contactws'),
-        get_string('auth_contactws_pswdparam_desc', 'auth_contactws'),
-        'Contrasena',
-        PARAM_TEXT
+    // API Password setting
+    $settings->add(new admin_setting_configpasswordunmask(
+        'auth_contactws/apipassword',
+        get_string('apipassword', 'auth_contactws'),
+        get_string('apipassword_desc', 'auth_contactws'),
+        ''
     ));
-
-    // Additional parameter setting
-    $settings->add(new admin_setting_configtext(
-        'auth_contactws/addparam',
-        get_string('auth_contactws_addparam', 'auth_contactws'),
-        get_string('auth_contactws_addparam_desc', 'auth_contactws'),
-        'true',
-        PARAM_TEXT
-    ));
-
-    // Change password URL setting
-    $settings->add(new admin_setting_configtext(
-        'auth_contactws/changepasswordurl',
-        get_string('auth_contactws_changepasswordurl', 'auth_contactws'),
-        get_string('auth_contactws_changepasswordurl_desc', 'auth_contactws'),
-        'http://url.com',
-        PARAM_URL
-    ));
-
-    // Display locking / mapping of profile fields.
-    $authplugin = get_auth_plugin('contactws');
-    display_auth_lock_options(
-        $settings,
-        $authplugin->authtype,
-        $authplugin->userfields,
-        get_string('auth_fieldlocks_help', 'auth'),
-        false,
-        false
-    );
 }
