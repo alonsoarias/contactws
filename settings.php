@@ -42,4 +42,9 @@ if ($ADMIN->fulltree) {
         get_string('apipassword_desc', 'auth_contactws'),
         ''
     ));
+
+    $authplugin = get_auth_plugin('contactws');
+    display_auth_lock_options($settings, $authplugin->authtype, $authplugin->userfields,
+        get_string('auth_fieldlocks_help', 'auth'), false, false,
+        $authplugin->customfields);
 }
