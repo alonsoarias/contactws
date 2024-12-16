@@ -17,7 +17,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->version   = 2024121404;        // The current plugin version (Date: YYYYMMDDXX)
-$plugin->requires  = 2023100900;        // Requires this Moodle version
+$plugin->requires  = 2021051100;        // Requires this Moodle version
 $plugin->component = 'auth_contactws';  // Full name of the plugin
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = 'v1.0.0';
