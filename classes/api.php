@@ -39,52 +39,60 @@ class api {
      * @return boolean
      */
     public static function clean_linked_logins($userid = false) {
-        return linked_login::delete_user_logins($userid);
+        debugging('[auth_contactws][api] Iniciando limpieza de logins vinculados para usuario: ' . ($userid ? $userid : 'todos'), DEBUG_DEVELOPER);
+        $result = linked_login::delete_user_logins($userid);
+        debugging('[auth_contactws][api] Limpieza de logins completada. Resultado: ' . ($result ? 'éxito' : 'fallo'), DEBUG_DEVELOPER);
+        return $result;
     }
 
     /**
      * List linked logins
-     *
-     * Requires auth/contactws:managelinkedlogins capability at the user context.
      *
      * @param int $userid (defaults to $USER->id)
      * @return boolean
      */
     public static function get_linked_logins($userid = false) {
         global $USER;
+        debugging('[auth_contactws][api] Obteniendo logins vinculados para usuario: ' . ($userid ? $userid : $USER->id), DEBUG_DEVELOPER);
 
         if ($userid === false) {
             $userid = $USER->id;
         }
 
         if (\core\session\manager::is_loggedinas()) {
+            debugging('[auth_contactws][api] Error: Intento de obtener logins mientras está logueado como otro usuario', DEBUG_DEVELOPER);
             throw new moodle_exception('notwhileloggedinas', 'auth_contactws');
         }
 
         $context = context_user::instance($userid);
         require_capability('auth/contactws:managelinkedlogins', $context);
 
-        return linked_login::get_records(['userid' => $userid, 'confirmtoken' => '']);
+        $result = linked_login::get_records(['userid' => $userid, 'confirmtoken' => '']);
+        debugging('[auth_contactws][api] Logins vinculados encontrados: ' . count($result), DEBUG_DEVELOPER);
+        return $result;
     }
 
     /**
      * Match username to user.
      *
      * @param string $username The username
-     * @return stdClass User record if found
+     * @return stdClass|false User record if found
      */
     public static function match_username_to_user($username) {
-        $params = [
-            'username' => $username
-        ];
+        debugging('[auth_contactws][api] Buscando coincidencia para username: ' . $username, DEBUG_DEVELOPER);
+        
+        $params = ['username' => $username];
         $result = linked_login::get_record($params);
 
         if ($result) {
             $user = \core_user::get_user($result->get('userid'));
             if (!empty($user) && !$user->deleted) {
+                debugging('[auth_contactws][api] Usuario encontrado con ID: ' . $user->id, DEBUG_DEVELOPER);
                 return $result;
             }
         }
+        
+        debugging('[auth_contactws][api] No se encontró coincidencia para username: ' . $username, DEBUG_DEVELOPER);
         return false;
     }
 
@@ -98,16 +106,19 @@ class api {
      */
     public static function link_login($userinfo, $userid = false, $skippermissions = false) {
         global $USER;
+        debugging('[auth_contactws][api] Iniciando vinculación de login para: ' . $userinfo['Usuario'], DEBUG_DEVELOPER);
 
         if ($userid === false) {
             $userid = $USER->id;
         }
 
         if (linked_login::has_existing_match($userinfo['Usuario'])) {
+            debugging('[auth_contactws][api] Error: Login ya vinculado para username: ' . $userinfo['Usuario'], DEBUG_DEVELOPER);
             throw new moodle_exception('alreadylinked', 'auth_contactws');
         }
 
         if (\core\session\manager::is_loggedinas()) {
+            debugging('[auth_contactws][api] Error: Intento de vincular mientras está logueado como otro usuario', DEBUG_DEVELOPER);
             throw new moodle_exception('notwhileloggedinas', 'auth_contactws');
         }
 
@@ -122,12 +133,17 @@ class api {
         $record->email = $userinfo['Email'];
         $record->confirmtoken = '';
         $record->confirmtokenexpires = 0;
+
+        debugging('[auth_contactws][api] Creando registro de login vinculado', DEBUG_DEVELOPER);
         $linkedlogin = new linked_login(0, $record);
-        return $linkedlogin->create();
+        $result = $linkedlogin->create();
+
+        debugging('[auth_contactws][api] Vinculación completada. Resultado: ' . ($result ? 'éxito' : 'fallo'), DEBUG_DEVELOPER);
+        return $result;
     }
 
     /**
-     * Create a new confirmed account.
+     * Create a new confirmed account with all fields populated.
      *
      * @param array $userinfo User info from SARH
      * @return stdClass The created user
@@ -137,38 +153,142 @@ class api {
         require_once($CFG->dirroot.'/user/profile/lib.php');
         require_once($CFG->dirroot.'/user/lib.php');
 
+        debugging('[auth_contactws][api] Iniciando creación de cuenta para: ' . $userinfo['Usuario'], DEBUG_DEVELOPER);
+
+        // Mapear campos
+        $mappings = new user_field_mapping();
+        $mapped_data = $mappings->map_fields($userinfo);
+        debugging('[auth_contactws][api] Datos mapeados: ' . print_r($mapped_data, true), DEBUG_DEVELOPER);
+
+        // Separar campos estándar y personalizados
+        $standard_fields = [];
+        $profile_fields = [];
+        foreach ($mapped_data as $field => $value) {
+            if (strpos($field, 'profile_field_') === 0) {
+                $profile_fields[$field] = $value;
+            } else {
+                $standard_fields[$field] = $value;
+            }
+        }
+
         // Crear el usuario base
-        $user = new stdClass();
+        $user = (object)$standard_fields;
         $user->auth = 'contactws';
         $user->mnethostid = $CFG->mnet_localhost_id;
         $user->confirmed = 1;
-        
-        // Asignar campos estándar de Moodle
-        $user->username = $userinfo['Usuario'];
-        $user->firstname = $userinfo['NombreCompleto'];
-        $user->lastname = $userinfo['ApellidoCompleto'];
-        $user->email = $userinfo['Email'];
-        $user->idnumber = $userinfo['NumeroDocumento'];
+        $user->timecreated = time();
+        $user->timemodified = time();
 
-        // Crear el usuario
+        debugging('[auth_contactws][api] Creando registro de usuario', DEBUG_DEVELOPER);
         $user->id = user_create_user($user, false, true);
 
-        // Preparar datos para campos personalizados
-        $customfields = new stdClass();
-        $customfields->id = $user->id;
-        $customfields->profile_field_nombrecampana = $userinfo['NombreCampana'];
-        $customfields->profile_field_nombrecentro = $userinfo['NombreCentro'];
-        $customfields->profile_field_cargo = $userinfo['Cargo'];
-        $customfields->profile_field_jefeinmediato = $userinfo['JefeInmediato'];
-        $customfields->profile_field_fechacontrato = $userinfo['FechaContrato'];
+        if (!$user->id) {
+            debugging('[auth_contactws][api] Error al crear usuario', DEBUG_DEVELOPER);
+            throw new moodle_exception('errorcreatinguserrecord', 'auth_contactws');
+        }
 
-        // Guardar campos personalizados
-        profile_save_data($customfields);
+        // Crear objeto para campos personalizados
+        if (!empty($profile_fields)) {
+            $profile_user = new stdClass();
+            $profile_user->id = $user->id;
+            foreach ($profile_fields as $field => $value) {
+                $profile_user->$field = $value;
+                debugging("[auth_contactws][api] Campo personalizado preparado - $field: $value", DEBUG_DEVELOPER);
+            }
 
-        // Link the login
+            // Guardar campos personalizados
+            if (profile_save_data($profile_user)) {
+                debugging('[auth_contactws][api] Campos personalizados guardados exitosamente', DEBUG_DEVELOPER);
+            } else {
+                debugging('[auth_contactws][api] Error al guardar campos personalizados', DEBUG_DEVELOPER);
+            }
+        }
+
+        // Vincular login
         self::link_login($userinfo, $user->id, true);
 
+        debugging('[auth_contactws][api] Usuario creado exitosamente con ID: ' . $user->id, DEBUG_DEVELOPER);
         return get_complete_user_data('id', $user->id);
+    }
+
+    /**
+     * Update user fields including both standard and custom fields
+     *
+     * @param int $userid User ID
+     * @param array $userinfo User information
+     * @return bool Success status
+     */
+    public static function update_user_fields($userid, $userinfo) {
+        global $DB, $CFG;
+        require_once($CFG->dirroot.'/user/profile/lib.php');
+        require_once($CFG->dirroot.'/user/lib.php');
+
+        debugging('[auth_contactws][api] Iniciando actualización de campos para usuario ID: ' . $userid, DEBUG_DEVELOPER);
+
+        // Obtener usuario actual
+        $user = $DB->get_record('user', ['id' => $userid]);
+        if (!$user) {
+            debugging('[auth_contactws][api] Error: Usuario no encontrado', DEBUG_DEVELOPER);
+            return false;
+        }
+
+        // Mapear campos
+        $mappings = new user_field_mapping();
+        $mapped_data = $mappings->map_fields($userinfo);
+        debugging('[auth_contactws][api] Datos mapeados: ' . print_r($mapped_data, true), DEBUG_DEVELOPER);
+
+        // Separar campos estándar y personalizados
+        $standard_fields = [];
+        $profile_fields = [];
+        foreach ($mapped_data as $field => $value) {
+            if (strpos($field, 'profile_field_') === 0) {
+                $profile_fields[$field] = $value;
+            } else {
+                $standard_fields[$field] = $value;
+            }
+        }
+
+        // Actualizar campos estándar
+        $updateuser = new stdClass();
+        $updateuser->id = $userid;
+        $needs_update = false;
+
+        foreach ($standard_fields as $field => $value) {
+            if (property_exists($user, $field) && $user->$field !== $value) {
+                $updateuser->$field = $value;
+                $needs_update = true;
+                debugging("[auth_contactws][api] Campo estándar '$field' requiere actualización de '{$user->$field}' a '$value'", DEBUG_DEVELOPER);
+            }
+        }
+
+        if ($needs_update) {
+            debugging('[auth_contactws][api] Actualizando campos estándar', DEBUG_DEVELOPER);
+            user_update_user($updateuser, false, true);
+        }
+
+        // Actualizar campos personalizados
+        if (!empty($profile_fields)) {
+            // Cargar datos actuales del perfil
+            profile_load_data($user);
+
+            $profile_user = new stdClass();
+            $profile_user->id = $userid;
+            foreach ($profile_fields as $field => $value) {
+                $profile_user->$field = $value;
+                debugging("[auth_contactws][api] Campo personalizado preparado - $field: $value", DEBUG_DEVELOPER);
+            }
+
+            // Guardar campos personalizados
+            if (profile_save_data($profile_user)) {
+                debugging('[auth_contactws][api] Campos personalizados actualizados exitosamente', DEBUG_DEVELOPER);
+            } else {
+                debugging('[auth_contactws][api] Error al actualizar campos personalizados', DEBUG_DEVELOPER);
+                return false;
+            }
+        }
+
+        debugging('[auth_contactws][api] Actualización de campos completada', DEBUG_DEVELOPER);
+        return true;
     }
 
     /**
@@ -177,6 +297,9 @@ class api {
      * @return bool
      */
     public static function is_enabled() {
-        return is_enabled_auth('contactws');
+        debugging('[auth_contactws][api] Verificando si auth_contactws está habilitado', DEBUG_DEVELOPER);
+        $result = is_enabled_auth('contactws');
+        debugging('[auth_contactws][api] auth_contactws está ' . ($result ? 'habilitado' : 'deshabilitado'), DEBUG_DEVELOPER);
+        return $result;
     }
 }
