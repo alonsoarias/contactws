@@ -105,52 +105,127 @@ class auth extends \auth_plugin_base {
      * @return bool Authentication success or failure
      */
     public function user_login($username, $password) {
+        global $DB;
+        
         debugging('[auth_contactws][auth] Iniciando proceso de login para usuario: ' . $username, DEBUG_DEVELOPER);
         
-        $cached = $this->get_static_user_info();
-        if (empty($cached)) {
-            debugging('[auth_contactws][auth] No hay información en caché, consultando API', DEBUG_DEVELOPER);
-            
-            $token = $this->get_sarh_token();
-            if (!$token) {
-                debugging('[auth_contactws][auth] Error: No se pudo obtener token', DEBUG_DEVELOPER);
-                return false;
-            }
-
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_URL => rtrim($this->config->baseurl, '/') . '/usuario',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => json_encode([
-                    'Username' => $username,
-                    'Password' => $password
-                ]),
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . $token
-                ]
-            ]);
-
-            $response = curl_exec($curl);
-            $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
-
-            if ($httpcode === 200) {
-                $data = json_decode($response, true);
-                if (isset($data['RespuestaSolicitud']) && $data['RespuestaSolicitud'] === true) {
-                    debugging('[auth_contactws][auth] Autenticación exitosa, guardando datos en caché', DEBUG_DEVELOPER);
-                    $this->set_static_user_info($data['Datos'][0]);
-                    return true;
-                }
-            }
-            debugging('[auth_contactws][auth] Fallo en autenticación', DEBUG_DEVELOPER);
+        // Forzar siempre consulta al API para obtener datos actualizados
+        $token = $this->get_sarh_token();
+        if (!$token) {
+            debugging('[auth_contactws][auth] Error: No se pudo obtener token', DEBUG_DEVELOPER);
             return false;
         }
+    
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => rtrim($this->config->baseurl, '/') . '/usuario',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode([
+                'Username' => $username,
+                'Password' => $password
+            ]),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $token
+            ]
+        ]);
+    
+        $response = curl_exec($curl);
+        $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+    
+        if ($httpcode === 200) {
+            $data = json_decode($response, true);
+            if (isset($data['RespuestaSolicitud']) && $data['RespuestaSolicitud'] === true) {
+                $userdata = $data['Datos'][0];
+                debugging('[auth_contactws][auth] Autenticación exitosa, guardando datos en caché', DEBUG_DEVELOPER);
+                $this->set_static_user_info($userdata);
+    
+                // Actualizar datos del usuario si ya existe
+                $user = $DB->get_record('user', ['username' => $username, 'deleted' => 0]);
+                if ($user) {
+                    debugging('[auth_contactws][auth] Usuario existente, actualizando datos', DEBUG_DEVELOPER);
+                    $this->update_existing_user($user, $userdata);
+                }
+    
+                return true;
+            }
+        }
+        debugging('[auth_contactws][auth] Fallo en autenticación', DEBUG_DEVELOPER);
+        return false;
+    }
 
-        $result = ($cached['Usuario'] === $username);
-        debugging('[auth_contactws][auth] Verificación desde caché: ' . ($result ? 'exitosa' : 'fallida'), DEBUG_DEVELOPER);
-        return $result;
+/**
+ * Update existing user data
+ *
+ * @param stdClass $user Current user record
+ * @param array $userdata New user data from API
+ */
+    private function update_existing_user($user, $userdata) {
+        global $CFG, $DB;
+        require_once($CFG->dirroot.'/user/profile/lib.php');
+        require_once($CFG->dirroot.'/user/lib.php');
+    
+        debugging('[auth_contactws][auth] Iniciando actualización de usuario existente', DEBUG_DEVELOPER);
+    
+        try {
+            // Mapear campos
+            $mappings = new user_field_mapping();
+            $mapped_data = $mappings->map_fields($userdata);
+            debugging('[auth_contactws][auth] Datos mapeados: ' . print_r($mapped_data, true), DEBUG_DEVELOPER);
+    
+            // Separar campos estándar y personalizados
+            $standard_fields = [];
+            $profile_fields = [];
+            foreach ($mapped_data as $field => $value) {
+                if (strpos($field, 'profile_field_') === 0) {
+                    $profile_fields[$field] = $value;
+                } else {
+                    $standard_fields[$field] = $value;
+                }
+            }
+    
+            // Actualizar campos estándar
+            $updateuser = new stdClass();
+            $updateuser->id = $user->id;
+            $needs_update = false;
+    
+            foreach ($standard_fields as $field => $value) {
+                if (property_exists($user, $field) && $user->$field !== $value) {
+                    $updateuser->$field = $value;
+                    $needs_update = true;
+                    debugging("[auth_contactws][auth] Campo estándar '$field' requiere actualización: De '{$user->$field}' a '$value'", DEBUG_DEVELOPER);
+                }
+            }
+    
+            if ($needs_update) {
+                debugging('[auth_contactws][auth] Actualizando campos estándar', DEBUG_DEVELOPER);
+                user_update_user($updateuser, false, true);
+            }
+    
+            // Actualizar campos personalizados
+            if (!empty($profile_fields)) {
+                // Cargar datos actuales del perfil
+                profile_load_data($user);
+    
+                $profile_user = new stdClass();
+                $profile_user->id = $user->id;
+                foreach ($profile_fields as $field => $value) {
+                    $profile_user->$field = $value;
+                    debugging("[auth_contactws][auth] Campo personalizado preparado - $field: $value", DEBUG_DEVELOPER);
+                }
+    
+                if (profile_save_data($profile_user)) {
+                    debugging('[auth_contactws][auth] Campos personalizados actualizados exitosamente', DEBUG_DEVELOPER);
+                } else {
+                    debugging('[auth_contactws][auth] Error al actualizar campos personalizados', DEBUG_DEVELOPER);
+                }
+            }
+    
+        } catch (\Exception $e) {
+            debugging('[auth_contactws][auth] Error actualizando usuario: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
     }
 
     /**
