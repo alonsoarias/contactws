@@ -17,7 +17,7 @@
 namespace auth_contactws;
 
 defined('MOODLE_INTERNAL') || die();
-
+use core_text;
 /**
  * User field mapping class.
  *
@@ -148,8 +148,29 @@ class user_field_mapping {
                     }
                 }
             } else {
-                // Para campos estándar, asegurar que sean string
+                // Para campos estándar, aplicar transformaciones específicas
                 $value = (string)$value;
+                
+                // Aplicar transformaciones según el campo
+                switch ($moodleField) {
+                    case 'username':
+                        $value = core_text::strtolower($value);
+                        break;
+                    case 'email':
+                        $value = core_text::strtolower($value);
+                        break;
+                    case 'firstname':
+                    case 'lastname':
+                        $value = core_text::strtoupper($value);
+                        break;
+                    // Para campos personalizados que requieran transformación
+                    case 'profile_field_NombreCampana':
+                    case 'profile_field_NombreCentro':
+                    case 'profile_field_Cargo':
+                    case 'profile_field_JefeInmediato':
+                        $value = core_text::strtoupper($value);
+                        break;
+                }
             }
 
             $result[$moodleField] = $value;
