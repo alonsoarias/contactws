@@ -33,7 +33,7 @@ require_once($CFG->dirroot . '/user/lib.php');
  * ContactWS authentication plugin.
  *
  * @package    auth_contactws
- * @copyright  2024 Your Name
+ * @copyright  2025 Pedro Arias <soporte@ingeweb.co>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU Public License
  */
 class auth extends \auth_plugin_base
