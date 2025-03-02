@@ -27,7 +27,7 @@ defined('MOODLE_INTERNAL') || die();
  * API class for auth contactws configuration.
  *
  * @package    auth_contactws
- * @copyright  2024 Your Name
+ * @copyright  2025 Pedro Arias <soporte@ingeweb.co>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class api {
