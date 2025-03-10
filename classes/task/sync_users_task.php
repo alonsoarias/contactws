@@ -317,31 +317,48 @@ class sync_users_task extends scheduled_task {
             // Process duplicate document numbers
             $userstosuspend = [];
             
+            // SECCIÓN MODIFICADA: Manejo de duplicados
             foreach ($docnumbercounts as $docnumber => $count) {
                 if ($count > 1) {
                     mtrace("Found $count users with document number $docnumber");
                     
-                    // Sort by timecreated (ascending)
+                    // Determine if this document should be active based on API data
+                    $shouldBeActive = isset($activedocuments[$docnumber]);
+                    
+                    // CAMBIO: Ordenar por timecreated (descendente) - El más reciente primero
                     usort($duplicateusers[$docnumber], function($a, $b) {
-                        return $a->timecreated - $b->timecreated;
+                        return $b->timecreated - $a->timecreated; // El más reciente primero
                     });
                     
-                    // Keep the newest one active (if in active list), suspend the rest
-                    $keepnewest = isset($activedocuments[$docnumber]);
+                    $mostRecentUser = $duplicateusers[$docnumber][0]; // Después de ordenar, este es el más reciente
                     
-                    for ($i = 0; $i < count($duplicateusers[$docnumber]); $i++) {
-                        $user = $duplicateusers[$docnumber][$i];
-                        
-                        // Suspend all except the newest (last) if document is in active list
-                        if ($keepnewest && $i < count($duplicateusers[$docnumber]) - 1) {
-                            $userstosuspend[$user->id] = $user;
-                        } else if (!$keepnewest) {
-                            // If document not in active list, suspend all
+                    mtrace("Most recent user for document $docnumber is: {$mostRecentUser->username} (ID: {$mostRecentUser->id}, created: " . 
+                           userdate($mostRecentUser->timecreated) . ")");
+                    
+                    // Procesar todos los usuarios duplicados
+                    foreach ($duplicateusers[$docnumber] as $i => $user) {
+                        // Si el documento debe estar activo y este es el usuario más reciente (índice 0)
+                        // entonces mantenerlo activo, de lo contrario suspender
+                        if ($shouldBeActive && $i === 0) {
+                            // Si el usuario más reciente estaba suspendido, reactivarlo
+                            if ($user->suspended) {
+                                mtrace("Unsuspending most recent user: {$user->username} (ID: {$user->id})");
+                                $updateuser = new \stdClass();
+                                $updateuser->id = $user->id;
+                                $updateuser->suspended = 0;
+                                user_update_user($updateuser, false);
+                            } else {
+                                mtrace("Keeping most recent user active: {$user->username} (ID: {$user->id})");
+                            }
+                        } else {
+                            // Suspender todos los demás duplicados
+                            mtrace("Suspending duplicate user: {$user->username} (ID: {$user->id})");
                             $userstosuspend[$user->id] = $user;
                         }
                     }
                 }
             }
+            // FIN DE SECCIÓN MODIFICADA
             
             // Process regular users (no duplicates)
             foreach ($moodleusers as $user) {
