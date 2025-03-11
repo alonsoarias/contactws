@@ -41,6 +41,6 @@ $tasks = [
         'hour' => '8',
         'day' => '*',
         'month' => '*',
-        'dayofweek' => '*'
+        'dayofweek' => '5'  // 5 = viernes
     ]
 ];
