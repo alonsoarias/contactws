@@ -20,4 +20,4 @@ $plugin->version   = 2025030300;        // The current plugin version (Date: YYY
 $plugin->requires  = 2021051100;        // Requires this Moodle version
 $plugin->component = 'auth_contactws';  // Full name of the plugin
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = 'v1.2.1';          // Versión actualizada para incluir estadísticas por estado
+$plugin->release   = 'v1.2.0';          // Versión actualizada para incluir estadísticas por estado
