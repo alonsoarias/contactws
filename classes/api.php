@@ -20,6 +20,7 @@ use context_user;
 use stdClass;
 use moodle_exception;
 use moodle_url;
+use core_text;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -81,6 +82,9 @@ class api {
     public static function match_username_to_user($username) {
         debugging('[auth_contactws][api] Buscando coincidencia para username: ' . $username, DEBUG_DEVELOPER);
         
+        // Asegurar que el nombre de usuario esté en minúsculas
+        $username = core_text::strtolower($username);
+        
         $params = ['username' => $username];
         $result = linked_login::get_record($params);
 
@@ -112,8 +116,11 @@ class api {
             $userid = $USER->id;
         }
 
-        if (linked_login::has_existing_match($userinfo['Usuario'])) {
-            debugging('[auth_contactws][api] Error: Login ya vinculado para username: ' . $userinfo['Usuario'], DEBUG_DEVELOPER);
+        // Asegurar que el nombre de usuario esté en minúsculas
+        $username = core_text::strtolower($userinfo['Usuario']);
+
+        if (linked_login::has_existing_match($username)) {
+            debugging('[auth_contactws][api] Error: Login ya vinculado para username: ' . $username, DEBUG_DEVELOPER);
             throw new moodle_exception('alreadylinked', 'auth_contactws');
         }
 
@@ -128,9 +135,9 @@ class api {
         }
 
         $record = new stdClass();
-        $record->username = $userinfo['Usuario'];
+        $record->username = $username; // Ya en minúsculas
         $record->userid = $userid;
-        $record->email = $userinfo['Email'];
+        $record->email = core_text::strtolower($userinfo['Email']);
         $record->confirmtoken = '';
         $record->confirmtokenexpires = 0;
 
@@ -155,6 +162,19 @@ class api {
 
         debugging('[auth_contactws][api] Iniciando creación de cuenta para: ' . $userinfo['Usuario'], DEBUG_DEVELOPER);
 
+        // Verificar que el usuario tenga estado activo (1)
+        if (!isset($userinfo['Estado']) || $userinfo['Estado'] != 1) {
+            debugging('[auth_contactws][api] Error: Usuario no tiene estado activo: ' . 
+                ($userinfo['Estado'] ?? 'no definido'), DEBUG_DEVELOPER);
+            throw new moodle_exception('errorauthuserstatus', 'auth_contactws');
+        }
+
+        // Asegurar que los datos críticos estén procesados correctamente
+        $userinfo['Usuario'] = core_text::strtolower($userinfo['Usuario']);
+        $userinfo['Email'] = core_text::strtolower($userinfo['Email']);
+        $userinfo['NombreCompleto'] = core_text::strtoupper($userinfo['NombreCompleto']);
+        $userinfo['ApellidoCompleto'] = core_text::strtoupper($userinfo['ApellidoCompleto']);
+
         // Mapear campos
         $mappings = new user_field_mapping();
         $mapped_data = $mappings->map_fields($userinfo);
@@ -178,6 +198,10 @@ class api {
         $user->confirmed = 1;
         $user->timecreated = time();
         $user->timemodified = time();
+
+        // Asegurarse de que username y idnumber coincidan con Usuario y NumeroDocumento
+        $user->username = $userinfo['Usuario']; // Ya en minúsculas
+        $user->idnumber = $userinfo['NumeroDocumento'];
 
         debugging('[auth_contactws][api] Creando registro de usuario', DEBUG_DEVELOPER);
         $user->id = user_create_user($user, false, true);
@@ -231,6 +255,12 @@ class api {
             debugging('[auth_contactws][api] Error: Usuario no encontrado', DEBUG_DEVELOPER);
             return false;
         }
+
+        // Asegurar que los datos críticos estén procesados correctamente
+        $userinfo['Usuario'] = core_text::strtolower($userinfo['Usuario']);
+        $userinfo['Email'] = core_text::strtolower($userinfo['Email']);
+        $userinfo['NombreCompleto'] = core_text::strtoupper($userinfo['NombreCompleto']);
+        $userinfo['ApellidoCompleto'] = core_text::strtoupper($userinfo['ApellidoCompleto']);
 
         // Mapear campos
         $mappings = new user_field_mapping();
