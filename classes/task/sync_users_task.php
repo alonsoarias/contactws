@@ -104,9 +104,7 @@ class sync_users_task extends scheduled_task {
                 'Username' => $config->apiusername,
                 'Password' => $config->apipassword
             ]),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 10
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json']
         ]);
         
         $response = curl_exec($curl);
@@ -155,9 +153,7 @@ class sync_users_task extends scheduled_task {
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
                 'Authorization: Bearer ' . $token
-            ],
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 20
+            ]
         ]);
         
         $response = curl_exec($curl);
@@ -222,7 +218,6 @@ class sync_users_task extends scheduled_task {
         $startTime = microtime(true);
         $maxProcessingTime = 240; // 4 minutos (ajustar según necesidad)
         
-        // Optimización: Procesar API en un solo bucle, sin consultas redundantes
         foreach ($apiusers as $apiuser) {
             // Si llevamos más del tiempo máximo, parar el procesamiento
             if ((microtime(true) - $startTime) > $maxProcessingTime) {
@@ -251,8 +246,10 @@ class sync_users_task extends scheduled_task {
                 $activedocuments[$docnumber] = $status;
             }
             
-            // Check if user exists in Moodle - optimizado para una sola consulta
-            if ($shouldbeactive && !$DB->record_exists('user', ['idnumber' => $docnumber, 'deleted' => 0])) {
+            // Check if user exists in Moodle
+            $userexists = $DB->record_exists('user', ['idnumber' => $docnumber, 'deleted' => 0]);
+            
+            if ($shouldbeactive && !$userexists) {
                 $missingusers[] = [
                     'docnumber' => $docnumber,
                     'status' => $status,
@@ -291,8 +288,8 @@ class sync_users_task extends scheduled_task {
         set_config('total_unprocessed_users', $totalUnprocessedUsers, 'auth_contactws');
         set_config('total_processed_users', $totalProcessedUsers, 'auth_contactws');
         
-        // Optimización: Obtener usuarios y datos de actividad en una sola consulta
-        $sql = "SELECT id, idnumber, username, suspended, timecreated, lastaccess, lastlogin, auth
+        // Get all Moodle users with auth_contactws
+        $sql = "SELECT id, idnumber, username, suspended, timecreated 
                 FROM {user} 
                 WHERE auth = 'contactws' AND deleted = 0";
         $moodleusers = $DB->get_records_sql($sql);
@@ -301,119 +298,83 @@ class sync_users_task extends scheduled_task {
         
         // Solo procesar usuarios de Moodle si aún estamos dentro del tiempo permitido
         if ((microtime(true) - $startTime) <= $maxProcessingTime) {
-            // Find duplicate document numbers
-            $usersbyidnumber = [];
-            $duplicateIdnumbers = [];
+            // Handle duplicate document numbers
+            $docnumbercounts = [];
+            $duplicateusers = [];
             
-            // Optimización: Mapear usuarios por idnumber en un solo paso
             foreach ($moodleusers as $user) {
                 if (!empty($user->idnumber)) {
-                    if (!isset($usersbyidnumber[$user->idnumber])) {
-                        $usersbyidnumber[$user->idnumber] = [];
-                    }
-                    $usersbyidnumber[$user->idnumber][] = $user;
-                    
-                    // Identificar duplicados
-                    if (count($usersbyidnumber[$user->idnumber]) == 2) {
-                        $duplicateIdnumbers[] = $user->idnumber;
+                    if (isset($docnumbercounts[$user->idnumber])) {
+                        $docnumbercounts[$user->idnumber]++;
+                        $duplicateusers[$user->idnumber][] = $user;
+                    } else {
+                        $docnumbercounts[$user->idnumber] = 1;
+                        $duplicateusers[$user->idnumber] = [$user];
                     }
                 }
             }
             
-            mtrace("Found " . count($duplicateIdnumbers) . " duplicate idnumbers.");
-            
-            // Usuarios para suspender y reactivar
+            // Process duplicate document numbers
             $userstosuspend = [];
-            $userstounsuspend = [];
             
-            // Procesar primero todos los duplicados
-            foreach ($duplicateIdnumbers as $docnumber) {
-                $users = $usersbyidnumber[$docnumber];
-                $shouldbeactive = isset($activedocuments[$docnumber]);
-                
-                if ($shouldbeactive) {
-                    // Encontrar el usuario con actividad más reciente
-                    usort($users, function($a, $b) {
-                        // Primero comparar por lastaccess (no nulo)
-                        if ($a->lastaccess > 0 && $b->lastaccess > 0) {
-                            return $b->lastaccess - $a->lastaccess; // Orden descendente
-                        }
-                        if ($a->lastaccess > 0 && $b->lastaccess == 0) return -1; // a primero
-                        if ($a->lastaccess == 0 && $b->lastaccess > 0) return 1;  // b primero
-                        
-                        // Luego por lastlogin
-                        if ($a->lastlogin > 0 && $b->lastlogin > 0) {
-                            return $b->lastlogin - $a->lastlogin;
-                        }
-                        if ($a->lastlogin > 0 && $b->lastlogin == 0) return -1;
-                        if ($a->lastlogin == 0 && $b->lastlogin > 0) return 1;
-                        
-                        // Finalmente por timecreated
-                        return $b->timecreated - $a->timecreated;
+            foreach ($docnumbercounts as $docnumber => $count) {
+                if ($count > 1) {
+                    mtrace("Found $count users with document number $docnumber");
+                    
+                    // Sort by timecreated (ascending)
+                    usort($duplicateusers[$docnumber], function($a, $b) {
+                        return $a->timecreated - $b->timecreated;
                     });
                     
-                    // El primer usuario es el más activo
-                    $mostActiveUser = $users[0];
+                    // Keep the newest one active (if in active list), suspend the rest
+                    $keepnewest = isset($activedocuments[$docnumber]);
                     
-                    mtrace("Most active user for document $docnumber is: $mostActiveUser->username (ID: $mostActiveUser->id)");
-                    
-                    // Procesar cada usuario duplicado
-                    foreach ($users as $user) {
-                        if ($user->id === $mostActiveUser->id) {
-                            // Asegurar que el usuario más activo esté activo
-                            if ($user->suspended) {
-                                $userstounsuspend[$user->id] = $user;
-                            }
-                        } else {
-                            // Suspender a todos los demás
-                            if (!$user->suspended) {
-                                $userstosuspend[$user->id] = $user;
-                            }
-                        }
-                    }
-                } else {
-                    // Si el documento no debe estar activo, suspender todos
-                    foreach ($users as $user) {
-                        if (!$user->suspended) {
+                    for ($i = 0; $i < count($duplicateusers[$docnumber]); $i++) {
+                        $user = $duplicateusers[$docnumber][$i];
+                        
+                        // Suspend all except the newest (last) if document is in active list
+                        if ($keepnewest && $i < count($duplicateusers[$docnumber]) - 1) {
+                            $userstosuspend[$user->id] = $user;
+                        } else if (!$keepnewest) {
+                            // If document not in active list, suspend all
                             $userstosuspend[$user->id] = $user;
                         }
                     }
                 }
             }
             
-            // Procesar usuarios no duplicados
+            // Process regular users (no duplicates)
             foreach ($moodleusers as $user) {
-                // Saltar usuarios ya marcados para suspensión o reactivación
-                if (isset($userstosuspend[$user->id]) || isset($userstounsuspend[$user->id])) {
+                // Skip users already marked for suspension due to duplicates
+                if (isset($userstosuspend[$user->id])) {
                     continue;
                 }
                 
-                // Saltar usuarios duplicados (ya procesados)
-                if (!empty($user->idnumber) && in_array($user->idnumber, $duplicateIdnumbers)) {
-                    continue;
-                }
-                
-                // Verificar si debe estar activo
+                // Check if user should be active
                 $shouldbeactive = !empty($user->idnumber) && isset($activedocuments[$user->idnumber]);
                 
                 if (!$shouldbeactive && !$user->suspended) {
-                    // Debe ser suspendido
+                    // User should be suspended
                     $userstosuspend[$user->id] = $user;
                 } else if ($shouldbeactive && $user->suspended) {
-                    // Debe ser reactivado
-                    $userstounsuspend[$user->id] = $user;
+                    // User should be unsuspended
+                    mtrace("Unsuspending user: $user->username (ID: $user->id)");
+                    $updateuser = new \stdClass();
+                    $updateuser->id = $user->id;
+                    $updateuser->suspended = 0;
+                    user_update_user($updateuser, false);
                 }
             }
             
-            // Aplicar cambios en lotes para mejorar rendimiento
-            // Suspender usuarios
+            // Suspend users
             mtrace(count($userstosuspend) . ' users to suspend.');
-            $this->update_users_batch($userstosuspend, 1);
-            
-            // Reactivar usuarios
-            mtrace(count($userstounsuspend) . ' users to unsuspend.');
-            $this->update_users_batch($userstounsuspend, 0);
-            
+            foreach ($userstosuspend as $user) {
+                mtrace("Suspending user: $user->username (ID: $user->id)");
+                $updateuser = new \stdClass();
+                $updateuser->id = $user->id;
+                $updateuser->suspended = 1;
+                user_update_user($updateuser, false);
+            }
         } else {
             mtrace('Skipped Moodle user processing due to time constraints.');
         }
@@ -425,56 +386,5 @@ class sync_users_task extends scheduled_task {
         set_config('active_users_count', $activeusers, 'auth_contactws');
         set_config('suspended_users_count', $suspendedusers, 'auth_contactws');
         set_config('last_sync_time', time(), 'auth_contactws');
-    }
-    
-    /**
-     * Update users' suspended status in batches for better performance.
-     *
-     * @param array $users Users to update
-     * @param int $suspended Suspended status (0 or 1)
-     */
-    private function update_users_batch($users, $suspended) {
-        global $DB;
-        require_once($GLOBALS['CFG']->dirroot . '/user/lib.php');
-        
-        if (empty($users)) {
-            return;
-        }
-        
-        // Usar transacción para mejor rendimiento
-        $transaction = $DB->start_delegated_transaction();
-        
-        try {
-            // Procesar en lotes pequeños
-            $batchSize = 100;
-            $processed = 0;
-            $userBatch = [];
-            
-            foreach ($users as $user) {
-                $userBatch[] = $user;
-                $processed++;
-                
-                // Cuando el lote alcanza el tamaño o es el último usuario
-                if (count($userBatch) >= $batchSize || $processed == count($users)) {
-                    foreach ($userBatch as $batchUser) {
-                        mtrace(($suspended ? "Suspending" : "Unsuspending") . " user: $batchUser->username (ID: $batchUser->id)");
-                        $updateuser = new \stdClass();
-                        $updateuser->id = $batchUser->id;
-                        $updateuser->suspended = $suspended;
-                        user_update_user($updateuser, false);
-                    }
-                    
-                    // Limpiar el lote
-                    $userBatch = [];
-                }
-            }
-            
-            // Confirmar transacción
-            $DB->commit_delegated_transaction($transaction);
-        } catch (\Exception $e) {
-            // Rollback en caso de error
-            $DB->rollback_delegated_transaction($transaction);
-            mtrace('Error updating users: ' . $e->getMessage());
-        }
     }
 }
