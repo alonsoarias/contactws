@@ -20,6 +20,7 @@ defined('MOODLE_INTERNAL') || die();
 
 use core\task\scheduled_task;
 use auth_contactws\auth;
+use core_text;
 
 /**
  * Task to synchronize users and suspend those not present in the SARH API.
@@ -201,11 +202,11 @@ class sync_users_task extends scheduled_task {
         
         mtrace('Processing ' . count($apiusers) . ' users...');
         
-        // Define which estados are considered "active"
-        $activestatuses = [1, 3, 5];
+        // Define which estado is considered "active" - MODIFICADO: Solo estado 1 (Activo)
+        $activestatuses = [1]; // Solo estado "Activo" (código 1)
         
-        // Create maps for active document numbers and missing users
-        $activedocuments = [];
+        // Create maps for active document numbers/usernames and missing users
+        $activeusers = [];
         $missingusers = [];
         
         // Statistics by status
@@ -233,6 +234,8 @@ class sync_users_task extends scheduled_task {
             $totalProcessedUsers++;
             
             $docnumber = $apiuser['NumeroDocumento'];
+            // Convertir el nombre de usuario a minúsculas
+            $username = core_text::strtolower($apiuser['Usuario']);
             $status = $apiuser['Estado'];
             $statusName = $apiuser['NEstado'];
             
@@ -248,23 +251,40 @@ class sync_users_task extends scheduled_task {
             $shouldbeactive = in_array($status, $activestatuses);
             
             if ($shouldbeactive) {
-                $activedocuments[$docnumber] = $status;
+                // Almacenar tanto NumeroDocumento como Usuario para la verificación
+                $activeusers[$docnumber] = [
+                    'username' => $username, // Ya está en minúsculas
+                    'status' => $status
+                ];
             }
             
-            // Check if user exists in Moodle - optimizado para una sola consulta
-            if ($shouldbeactive && !$DB->record_exists('user', ['idnumber' => $docnumber, 'deleted' => 0])) {
-                $missingusers[] = [
-                    'docnumber' => $docnumber,
-                    'status' => $status,
-                    'statusname' => $statusName
+            // Verificar que coincidan tanto idnumber como username
+            if ($shouldbeactive) {
+                // Consulta para verificar si existe un usuario con el mismo idnumber y username
+                $sql = "SELECT id FROM {user} 
+                        WHERE idnumber = :idnumber 
+                        AND username = :username 
+                        AND deleted = 0";
+                $params = [
+                    'idnumber' => $docnumber,
+                    'username' => $username // Ya está en minúsculas
                 ];
-                $totalMissingUsers++;
                 
-                // Update missing count by status
-                if (isset($statusStats[$status])) {
-                    $statusStats[$status]['missing']++;
-                } else {
-                    $statusStats['other']['missing']++;
+                if (!$DB->record_exists_sql($sql, $params)) {
+                    $missingusers[] = [
+                        'docnumber' => $docnumber,
+                        'username' => $username, // Ya está en minúsculas
+                        'status' => $status,
+                        'statusname' => $statusName
+                    ];
+                    $totalMissingUsers++;
+                    
+                    // Update missing count by status
+                    if (isset($statusStats[$status])) {
+                        $statusStats[$status]['missing']++;
+                    } else {
+                        $statusStats['other']['missing']++;
+                    }
                 }
             }
         }
@@ -278,7 +298,7 @@ class sync_users_task extends scheduled_task {
             mtrace("$totalUnprocessedUsers users not processed due to time constraints.");
         }
         
-        mtrace(count($activedocuments) . ' users should be active based on API data.');
+        mtrace(count($activeusers) . ' users should be active based on API data.');
         mtrace($totalMissingUsers . ' active users from API are missing in Moodle.');
         
         // Store missing users for notification
@@ -301,100 +321,16 @@ class sync_users_task extends scheduled_task {
         
         // Solo procesar usuarios de Moodle si aún estamos dentro del tiempo permitido
         if ((microtime(true) - $startTime) <= $maxProcessingTime) {
-            // Find duplicate document numbers
-            $usersbyidnumber = [];
-            $duplicateIdnumbers = [];
-            
-            // Optimización: Mapear usuarios por idnumber en un solo paso
-            foreach ($moodleusers as $user) {
-                if (!empty($user->idnumber)) {
-                    if (!isset($usersbyidnumber[$user->idnumber])) {
-                        $usersbyidnumber[$user->idnumber] = [];
-                    }
-                    $usersbyidnumber[$user->idnumber][] = $user;
-                    
-                    // Identificar duplicados
-                    if (count($usersbyidnumber[$user->idnumber]) == 2) {
-                        $duplicateIdnumbers[] = $user->idnumber;
-                    }
-                }
-            }
-            
-            mtrace("Found " . count($duplicateIdnumbers) . " duplicate idnumbers.");
-            
             // Usuarios para suspender y reactivar
             $userstosuspend = [];
             $userstounsuspend = [];
             
-            // Procesar primero todos los duplicados
-            foreach ($duplicateIdnumbers as $docnumber) {
-                $users = $usersbyidnumber[$docnumber];
-                $shouldbeactive = isset($activedocuments[$docnumber]);
-                
-                if ($shouldbeactive) {
-                    // Encontrar el usuario con actividad más reciente
-                    usort($users, function($a, $b) {
-                        // Primero comparar por lastaccess (no nulo)
-                        if ($a->lastaccess > 0 && $b->lastaccess > 0) {
-                            return $b->lastaccess - $a->lastaccess; // Orden descendente
-                        }
-                        if ($a->lastaccess > 0 && $b->lastaccess == 0) return -1; // a primero
-                        if ($a->lastaccess == 0 && $b->lastaccess > 0) return 1;  // b primero
-                        
-                        // Luego por lastlogin
-                        if ($a->lastlogin > 0 && $b->lastlogin > 0) {
-                            return $b->lastlogin - $a->lastlogin;
-                        }
-                        if ($a->lastlogin > 0 && $b->lastlogin == 0) return -1;
-                        if ($a->lastlogin == 0 && $b->lastlogin > 0) return 1;
-                        
-                        // Finalmente por timecreated
-                        return $b->timecreated - $a->timecreated;
-                    });
-                    
-                    // El primer usuario es el más activo
-                    $mostActiveUser = $users[0];
-                    
-                    mtrace("Most active user for document $docnumber is: $mostActiveUser->username (ID: $mostActiveUser->id)");
-                    
-                    // Procesar cada usuario duplicado
-                    foreach ($users as $user) {
-                        if ($user->id === $mostActiveUser->id) {
-                            // Asegurar que el usuario más activo esté activo
-                            if ($user->suspended) {
-                                $userstounsuspend[$user->id] = $user;
-                            }
-                        } else {
-                            // Suspender a todos los demás
-                            if (!$user->suspended) {
-                                $userstosuspend[$user->id] = $user;
-                            }
-                        }
-                    }
-                } else {
-                    // Si el documento no debe estar activo, suspender todos
-                    foreach ($users as $user) {
-                        if (!$user->suspended) {
-                            $userstosuspend[$user->id] = $user;
-                        }
-                    }
-                }
-            }
-            
-            // Procesar usuarios no duplicados
+            // Procesar cada usuario de Moodle
             foreach ($moodleusers as $user) {
-                // Saltar usuarios ya marcados para suspensión o reactivación
-                if (isset($userstosuspend[$user->id]) || isset($userstounsuspend[$user->id])) {
-                    continue;
-                }
-                
-                // Saltar usuarios duplicados (ya procesados)
-                if (!empty($user->idnumber) && in_array($user->idnumber, $duplicateIdnumbers)) {
-                    continue;
-                }
-                
-                // Verificar si debe estar activo
-                $shouldbeactive = !empty($user->idnumber) && isset($activedocuments[$user->idnumber]);
+                // Verificar si debe estar activo basado en coincidencia exacta de idnumber y username
+                $shouldbeactive = !empty($user->idnumber) && 
+                                 isset($activeusers[$user->idnumber]) && 
+                                 $activeusers[$user->idnumber]['username'] === $user->username;
                 
                 if (!$shouldbeactive && !$user->suspended) {
                     // Debe ser suspendido
