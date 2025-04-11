@@ -153,6 +153,13 @@ class auth extends \auth_plugin_base
                 $userdata['NombreCompleto'] = core_text::strtoupper($userdata['NombreCompleto']);
                 $userdata['ApellidoCompleto'] = core_text::strtoupper($userdata['ApellidoCompleto']);
 
+                // Verificar que el usuario tenga estado activo
+                if (!isset($userdata['Estado']) || $userdata['Estado'] != 1) {
+                    debugging('[auth_contactws][auth] Error: El usuario no tiene estado activo: ' . 
+                        ($userdata['Estado'] ?? 'no definido'), DEBUG_DEVELOPER);
+                    return false;
+                }
+
                 debugging('[auth_contactws][auth] Autenticación exitosa, guardando datos en caché', DEBUG_DEVELOPER);
                 $this->set_static_user_info($userdata);
 
@@ -309,6 +316,12 @@ class auth extends \auth_plugin_base
 
         debugging('[auth_contactws][auth] Información de usuario disponible: ' . print_r($userinfo, true), DEBUG_DEVELOPER);
 
+        // Verificar que el estado del usuario es activo (1)
+        if (isset($userinfo['Estado']) && $userinfo['Estado'] != 1) {
+            debugging('[auth_contactws][auth] Usuario no tiene estado activo: ' . $userinfo['Estado'], DEBUG_DEVELOPER);
+            throw new moodle_exception('errorauthuserstatus', 'auth_contactws');
+        }
+
         // Mapear campos
         $mappings = new user_field_mapping();
         $mapped_data = $mappings->map_fields($userinfo);
@@ -342,6 +355,10 @@ class auth extends \auth_plugin_base
             $user->timecreated = time();
             $user->timemodified = time();
 
+            // Asegurarse de que username y idnumber coincidan con Usuario y NumeroDocumento
+            $user->username = $userinfo['Usuario']; // Ya en minúsculas
+            $user->idnumber = $userinfo['NumeroDocumento'];
+
             $user->id = user_create_user($user, false, true);
             debugging('[auth_contactws][auth] Usuario base creado con ID: ' . $user->id, DEBUG_DEVELOPER);
 
@@ -362,6 +379,12 @@ class auth extends \auth_plugin_base
             }
         } else {
             debugging('[auth_contactws][auth] Usuario existe, actualizando información', DEBUG_DEVELOPER);
+
+            // Verificar que el username y idnumber coinciden con Usuario y NumeroDocumento
+            if ($user->idnumber != $userinfo['NumeroDocumento']) {
+                debugging('[auth_contactws][auth] Error: idnumber no coincide con NumeroDocumento', DEBUG_DEVELOPER);
+                throw new moodle_exception('errorauthidnumbermismatch', 'auth_contactws');
+            }
 
             // Actualizar campos estándar
             $updateuser = new stdClass();
